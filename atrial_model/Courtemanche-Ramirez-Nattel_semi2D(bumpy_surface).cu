@@ -1,7 +1,7 @@
 /*
 Atrial fibrillation simulation on semi-2D surface (bumpy geometry)
 Reference:
-Jun-Seop Song et al. (2018) Pro-Arrhythmogenic Effects of Heterogeneous Tissue Curvature¡ªA Suggestion for Role of Left Atrial Appendage in Atrial Fibrillation¡ª. Circulation Journal, 83(1), 32-40.
+Jun-Seop Song et al. (2018) Pro-Arrhythmogenic Effects of Heterogeneous Tissue Curvature - Suggestion for Role of Left Atrial Appendage in Atrial Fibrillation. Circulation Journal, 83(1), 32-40.
 https://doi.org/10.1253/circj.CJ-18-0615
 */
 
