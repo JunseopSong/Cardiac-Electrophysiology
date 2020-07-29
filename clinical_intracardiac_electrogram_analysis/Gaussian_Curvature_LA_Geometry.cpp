@@ -1,203 +1,139 @@
-/*
-Calculate Gaussian curvature of LA geometry
-Jun-Seop Song 2015.07.14
-*/
+// Calculate curvature map of triangular mesh
+// Jun-Seop Song
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <cmath>
 
-#define MAX_DEGREE 15
+using namespace std;
+
 #define PI 3.141592653589793238
 
-
-typedef struct Node{
-	bool isBlock;
-	double xyz[3];
-
-	int degree;
-	int link[MAX_DEGREE];
-
-	double Gaussian_Curvature;
+typedef struct Node {
+	int idx;
+	double xyz[3]; // coordinate (x,y,z)
+	double curvature; // Gaussian curvature
 	double sumArea; // sum of areas of neighboring triangles
 } Node;
 
+typedef struct Element {
+	Node* v[3];
+} Element;
 
-int nde, nel;
-int *ele[3];
-Node *mesh;
+
+int numVertex, numEle;
+vector<Node> vertex;
+vector<Element> ele;
 
 
-void importGSR()
+void importMesh()
 {
-	int i, j, tmpInt;
-	
-	FILE *fin = fopen("Input.dat", "r");
-	fscanf(fin, "%d %d", &nde, &nel);
-	
-	mesh = new Node[nde];
-	for(i=0; i<3; i++) ele[i] = new int[nel];
-	
-	for(i=0; i<nde; i++)
+	ifstream fin;
+	char buf[100];
+	int i, t, u[3];
+
+	fin.open("input.ply");
+
+	fin.getline(buf, 100);
+	fin.getline(buf, 100);
+	fin >> buf >> buf >> numVertex >> buf;
+	fin.getline(buf, 100);
+	fin.getline(buf, 100);
+	fin.getline(buf, 100);
+	fin >> buf >> buf >> numEle >> buf;
+	fin.getline(buf, 100);
+	fin.getline(buf, 100);
+
+	cout << "Vertex:" << numVertex << "   Element:" << numEle << endl;
+
+	vertex.assign(numVertex, Node());
+	for (i = 0; i < numVertex; ++i)
 	{
-		mesh[i].isBlock = false;
-		mesh[i].degree = 0;
+		vertex[i].idx = i;
+		fin >> vertex[i].xyz[0] >> vertex[i].xyz[1] >> vertex[i].xyz[2];
 	}
 
-	// Input vertex
-	for(i=0; i<nde; i++)
+	ele.assign(numEle, Element());
+	for (i = 0; i < numEle; ++i)
 	{
-		for(j=0; j<3; j++) fscanf(fin, "%lf", &mesh[i].xyz[j]);
+		fin >> t >> u[0] >> u[1] >> u[2];
+		ele[i].v[0] = &vertex[u[0]];
+		ele[i].v[1] = &vertex[u[1]];
+		ele[i].v[2] = &vertex[u[2]];
 	}
 
-	// Input element
-	for(i=0; i<nel; i++)
-	{
-		for(j=0; j<3; j++) fscanf(fin, "%d", &ele[j][i]);
-		fscanf(fin, "%d", &tmpInt);
-
-		for(j=0; j<3; j++) ele[j][i]--;
-
-		if(tmpInt == 4)
-		{
-			for(j=0; j<3; j++) mesh[ele[j][i]].isBlock = true;
-		}
-	}
-
-	fclose(fin);
+	fin.close();
 }
 
 
-void addLink(int from, int to)
+double length(Node* node1, Node* node2)
 {
-	int i;
-
-	for(i=0; i<mesh[from].degree; i++)
-	{
-		if(mesh[from].link[i] == to) return;
-	}
-
-	mesh[from].link[mesh[from].degree++] = to;
-}
-
-
-void setLink()
-{
-	int i, j;
-
-	for(i=0; i<nel; i++)
-	{
-		for(j=0; j<3; j++)
-		{
-			addLink(ele[j][i], ele[(j+1)%3][i]);
-			addLink(ele[(j+1)%3][i], ele[j][i]);
-		}
-	}
-}
-
-
-double length(int node1, int node2)
-{
-	int i;
-	double sum = 0.0;
-
-	for(i=0; i<3; i++) sum += (mesh[node1].xyz[i]-mesh[node2].xyz[i])*(mesh[node1].xyz[i]-mesh[node2].xyz[i]);
-
-	return sqrt(sum);
+	double len = 0.0;
+	for (int i = 0; i < 3; ++i) len += (node1->xyz[i] - node2->xyz[i])*(node1->xyz[i] - node2->xyz[i]);
+	return sqrt(len);
 }
 
 
 void calcGaussianCurvature()
 {
 	int i, j;
-	int v1, v2, v3;
-	double len12, len13, len23, s;
+	Node* v[3];
+	double len[3], s, area;
 
-	for(i=0; i<nde; i++)
+	for (i = 0; i < numVertex; ++i)
 	{
-		mesh[i].Gaussian_Curvature = 2*PI;
-		mesh[i].sumArea = 0.0;
+		vertex[i].curvature = 2 * PI;
+		vertex[i].sumArea = 0.0;
 	}
 
-	for(i=0; i<nel; i++)
+	for (i = 0; i < numEle; ++i)
 	{
-		for(j=0; j<3; j++)
-		{
-			v1 = ele[j][i];
-			v2 = ele[(j+1)%3][i];
-			v3 = ele[(j+2)%3][i];
+		for (j = 0; j < 3; ++j) v[j] = ele[i].v[j];
 
-			len12 = length(v1, v2);
-			len13 = length(v1, v3);
-			len23 = length(v2, v3);
-			s = (len12 + len13 + len23) / 2.0;
+		for (j = 0; j < 3; ++j) len[j] = length(v[(j + 1) % 3], v[(j + 2) % 3]);
+		s = (len[0] + len[1] + len[2]) / 2.0;
+		area = sqrt(s*(s - len[0])*(s - len[1])*(s - len[2]));
 
-			mesh[v1].Gaussian_Curvature -= acos((len12*len12 + len13*len13 - len23*len23)/(2.0*len12*len13));
-			mesh[v1].sumArea += sqrt(s*(s-len12)*(s-len13)*(s-len23));
-		}
+		for (j = 0; j < 3; ++j)
+			v[j]->curvature -= acos((len[(j + 1) % 3] * len[(j + 1) % 3] + len[(j + 2) % 3] * len[(j + 2) % 3] - len[j] * len[j]) / (2.0*len[(j + 1) % 3] * len[(j + 2) % 3]));
+		for (j = 0; j < 3; ++j) v[j]->sumArea += area;
 	}
 
 	// By Gauss-Bonnet Theorem
-	for(i=0; i<nde; i++)
-	{
-		mesh[i].Gaussian_Curvature = mesh[i].Gaussian_Curvature / (mesh[i].sumArea/3.0);
-	}
+	for (i = 0; i < numVertex; ++i)
+		vertex[i].curvature /= (vertex[i].sumArea / 3.0);
 }
 
 
 void exportResult()
 {
+	ofstream fout;
 	int i;
-	FILE *fout;
-	
-	fout = fopen("Gaussian_Curvature.plt", "w");
 
-	fprintf(fout, "VARIABLES = \"X\", \"Y\", \"Z\", \"Gaussian_Curvature\"\n");
-	fprintf(fout, "ZONE F=FEPOINT, ET=triangle, N=%d , E=%d\n", nde, nel);
-
-	for(i=0; i<nde; i++)
-	{
-		fprintf(fout, "%lf %lf %lf %lf\n", mesh[i].xyz[0], mesh[i].xyz[1], mesh[i].xyz[2], mesh[i].Gaussian_Curvature);
-	}
-
-	for(i=0; i<nel; i++) fprintf(fout, "%d %d %d\n", ele[0][i]+1, ele[1][i]+1, ele[2][i]+1);
-
-	fclose(fout);
-
-
-	fout = fopen("Gaussian_Curvature.txt", "w");
-	for(i=0; i<nde; i++) fprintf(fout, "%lf\n", mesh[i].Gaussian_Curvature);
-	fclose(fout);
-}
-
-
-void curvatureSmoothing()
-{
-	double *tmp = new double[nde];
-	int i, j;
-
-	for(i=0; i<nde; i++)
-	{
-		tmp[i] = mesh[i].Gaussian_Curvature;
-		
-		for(j=0; j<mesh[i].degree; j++) tmp[i] += mesh[mesh[i].link[j]].Gaussian_Curvature;
-
-		tmp[i] = tmp[i] / (mesh[i].degree + 1);
-	}
-
-	for(i=0; i<nde; i++) mesh[i].Gaussian_Curvature = tmp[i];
-
-	delete[] tmp;
+	fout.open("output.ply");
+	fout << "ply" << endl
+		<< "format ascii 1.0" << endl
+		<< "element vertex " << numVertex << endl
+		<< "property float x" << endl
+		<< "property float y" << endl
+		<< "property float z" << endl
+		<< "property float quality" << endl
+		<< "element face " << numEle << endl
+		<< "property list uchar int vertex_indices" << endl
+		<< "end_header" << endl;
+	for (i = 0; i < numVertex; ++i)
+		fout << vertex[i].xyz[0] << " " << vertex[i].xyz[1] << " " << vertex[i].xyz[2] << " " << vertex[i].curvature << endl;
+	for (i = 0; i < numEle; ++i)
+		fout << "3 " << ele[i].v[0]->idx << " " << ele[i].v[1]->idx << " " << ele[i].v[2]->idx << endl;
+	fout.close();
 }
 
 
 int main()
 {
-	printf("Curvature Calculator (2015.07.14)\n");
-	importGSR();
-	setLink();
+	importMesh();
 	calcGaussianCurvature();
-	curvatureSmoothing();
 	exportResult();
 
 	return 0;
